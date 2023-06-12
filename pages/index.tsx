@@ -1,122 +1,350 @@
 import Head from 'next/head'
-import Image from 'next/image'
-import { Inter } from 'next/font/google'
-import styles from '@/styles/Home.module.css'
+import { Button, Space, Table, notification, Typography, Modal } from 'antd'
+import styles from './index.module.scss'
+import { invoke } from '@tauri-apps/api/tauri'
+import React, { useEffect, useState } from 'react'
+import { useWindowSize } from '@react-hook/window-size/throttled'
+import { useHotkeys } from 'react-hotkeys-hook'
+import * as R from 'ramda'
+import scrollIntoView from 'scroll-into-view-if-needed'
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import ReactDOMServer from 'react-dom/server'
+import * as cheerio from 'cheerio'
+import copyToClipboard from 'copy-to-clipboard'
 
-const inter = Inter({ subsets: ['latin'] })
+type Row = { name: string; content: string; label: string }
+
+type TiptapMethods = {
+  getContent: () => Row['content']
+}
+
+const Tiptap = React.forwardRef(
+  (props: { content: Row['content'] }, ref: React.ForwardedRef<TiptapMethods>) => {
+    const editor = useEditor(
+      {
+        extensions: [StarterKit],
+        content: contentToHtml(props.content),
+      },
+      [props.content]
+    )
+    React.useImperativeHandle(ref, () => ({
+      getContent: () => {
+        let html: string
+        if (editor) html = editor.getHTML()
+        else throw new Error(`Could not fetch editor content`)
+        return htmlToContent(html)
+      },
+    }))
+    return <EditorContent editor={editor} className={styles.tiptap} />
+  }
+)
+Tiptap.displayName = 'Tiptap'
+
+/**
+ * Parse paragraph breaks and create a React fragment
+ */
+function contentToReact(content: string): React.ReactElement {
+  return (
+    <>
+      {content.split('\n\n').map((p, i) => (
+        <p key={i}>{p}</p>
+      ))}
+    </>
+  )
+}
+
+/**
+ * Parse paragraph breaks and create HTML
+ */
+function contentToHtml(content: string): string {
+  return ReactDOMServer.renderToStaticMarkup(contentToReact(content))
+}
+
+/**
+ * Inverse of `contentToHtml`
+ */
+function htmlToContent(html: string): string {
+  const $ = cheerio.load(html)
+  return Array.from($('p'))
+    .map((p) => $.text([p]))
+    .join('\n\n')
+}
 
 export default function Home() {
+  // Which rows are marked (selected)
+  const [marked, setMarked] = useState<string[]>([])
+
+  const rowSelection = {
+    selectedRowKeys: marked,
+    onChange: (keys: React.Key[], rows: Row[]) => {
+      setMarked(keys as string[])
+    },
+    getCheckboxProps: (record: Row) => ({
+      name: record.name,
+    }),
+  }
+
+  const [data, setData] = useState<Row[]>([])
+
+  // Which row is focused (under cursor) right now
+  const [focused, setFocused] = useState<{ index: number; name: string } | null>(null)
+
+  // Call this when rows are added or removed
+  const recalcFocused = (data: Row[]) => {
+    // If this was the last row, we say goodbye
+    if (data.length === 0) {
+      setFocused(null)
+      return
+    }
+    // If there was no focused item before, we choose the first one
+    if (!focused) {
+      setFocused({ index: 0, name: data[0].name })
+      return
+    }
+    // If there was a focused item, and it's still there (name-wise), we recalc its index. Otherwise we preserve the index and choose whatever row had that index
+    let newIndex = data.findIndex((row) => row.name === focused.name)
+    if (newIndex === -1) newIndex = R.clamp(0, data.length - 1, focused.index)
+    setFocused({ index: newIndex, name: data[newIndex].name })
+  }
+
+  // Call this when rows are changed or removed
+  const recalcMarked = (data: Row[]) => {
+    setMarked(marked.filter((item: string) => data.some((row) => row.name === item)))
+  }
+
+  const load = () => {
+    invoke('load')
+      .then((data: any) => {
+        setData(data)
+        recalcFocused(data as Row[])
+        recalcMarked(data as Row[])
+      })
+      .catch((err) => {
+        notification.open({
+          message: 'Error while loading the data',
+          description: err.toString(),
+          type: 'error',
+        })
+      })
+  }
+
+  const kill = () => {
+    const namesToKill = focused && marked.length === 0 ? [focused.name] : marked
+    if (namesToKill.length === 0) return
+    invoke('kill', { names: namesToKill })
+      .then(() => {
+        load()
+      })
+      .catch((err) => {
+        notification.open({
+          type: 'error',
+          message: 'Error while killing the memos',
+          description: err.toString(),
+        })
+      })
+  }
+
+  const merge = () => {
+    if (marked.length < 2) return
+    invoke('merge', { names: marked })
+      .then(() => {
+        load()
+      })
+      .catch((err) => {
+        notification.open({
+          type: 'error',
+          message: 'Error while merging the memos',
+          description: err.toString(),
+        })
+      })
+  }
+
+  const mark = () => {
+    if (!focused) return
+    if (marked.includes(focused.name)) {
+      setMarked((marked) => marked.filter((x) => x !== focused.name))
+    } else {
+      setMarked((marked) => [...marked, focused.name])
+    }
+  }
+
+  const unmarkAll = () => {
+    setMarked([])
+  }
+
+  const focusNext = () => {
+    if (!focused || data.length < 1 || focused.index === data.length - 1) return
+    const newFocused = { index: focused.index + 1, name: data[focused.index + 1].name }
+    setFocused(newFocused)
+    scrollIntoView(document.querySelector(`tr[data-row-key="${newFocused.name}"]`)!, {
+      scrollMode: 'if-needed',
+    })
+  }
+
+  const focusPrev = () => {
+    if (!focused || data.length < 1 || focused.index === 0) return
+    const newFocused = { index: focused.index - 1, name: data[focused.index - 1].name }
+    setFocused(newFocused)
+    scrollIntoView(document.querySelector(`tr[data-row-key="${newFocused.name}"]`)!, {
+      scrollMode: 'if-needed',
+    })
+  }
+
+  const copy = () => {
+    const namesToCopy = focused && marked.length === 0 ? [focused.name] : marked
+    if (namesToCopy.length === 0) return
+    const result = contentToHtml(
+      data
+        .filter((row) => namesToCopy.includes(row.name))
+        .map((row) => row.content)
+        .join('\n\n')
+    )
+    copyToClipboard(result, { format: 'text/html' })
+    notification.open({
+      message: 'Copied!',
+      type: 'success',
+    })
+  }
+
+  const play = () => {
+    const namesToPlay = focused && marked.length === 0 ? [focused.name] : marked
+    if (namesToPlay.length === 0) return
+    invoke('open', { name: namesToPlay.join(',') })
+  }
+
+  const [rewordModalOpen, setRewordModalOpen] = useState(false)
+  const rewordEditorRef: React.RefObject<TiptapMethods> = React.useRef(null)
+  const rewordModal = (
+    <Modal
+      width="60vw"
+      open={rewordModalOpen}
+      onCancel={() => setRewordModalOpen(false)}
+      onOk={() => {
+        if (!focused) return
+        invoke('set_content', {
+          name: focused.name,
+          newContent: rewordEditorRef.current!.getContent(),
+        }).then(() => {
+          setRewordModalOpen(false)
+          load()
+        })
+      }}
+    >
+      {focused && (
+        <>
+          <h3>{focused.name}</h3>
+          <Tiptap content={data[focused.index].content} ref={rewordEditorRef} />
+        </>
+      )}
+    </Modal>
+  )
+  const reword = () => {
+    if (!focused) return
+    setRewordModalOpen(true)
+  }
+
+  // Do a load on start (probably ok to ignore the hook warning?)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [])
+
+  for (const [key, action] of [
+    ['m', mark],
+    ['k', kill],
+    ['u', merge],
+    ['c', copy],
+    ['Space', play],
+    ['Enter', reword],
+    ['Escape', unmarkAll],
+    ['ArrowDown', focusNext],
+    ['ArrowUp', focusPrev],
+  ] satisfies [string, () => void][]) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useHotkeys(
+      key,
+      (event) => {
+        event.preventDefault()
+        action()
+      },
+      { enabled: !rewordModalOpen }
+    )
+  }
+
+  const [windowWidth, windowHeight] = useWindowSize()
+
   return (
     <>
       <Head>
-        <title>Create Next App</title>
-        <meta name="description" content="Generated by create next app" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
+        <title>Memos</title>
       </Head>
-      <main className={styles.main}>
-        <div className={styles.description}>
-          <p>
-            Get started by editing&nbsp;
-            <code className={styles.code}>pages/index.tsx</code>
-          </p>
-          <div>
-            <a
-              href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              By{' '}
-              <Image
-                src="/vercel.svg"
-                alt="Vercel Logo"
-                className={styles.vercelLogo}
-                width={100}
-                height={24}
-                priority
-              />
-            </a>
-          </div>
-        </div>
-
-        <div className={styles.center}>
-          <Image
-            className={styles.logo}
-            src="/next.svg"
-            alt="Next.js Logo"
-            width={180}
-            height={37}
-            priority
-          />
-          <div className={styles.thirteen}>
-            <Image
-              src="/thirteen.svg"
-              alt="13"
-              width={40}
-              height={31}
-              priority
+      <main>
+        {rewordModal}
+        <Space
+          direction="vertical"
+          size="large"
+          style={{ width: '100%', padding: '1rem', height: '95vh' }}
+        >
+          <Space direction="horizontal" size="middle">
+            <Space.Compact block>
+              <Button type="dashed" onClick={mark}>
+                [M] Mark
+              </Button>
+              <Button onClick={copy}>[C] Copy</Button>
+              <Button danger onClick={kill}>
+                [K] Kill
+              </Button>
+              <Button onClick={merge}>[U] Merge</Button>
+              <Button onClick={reword}>[⏎] Reword</Button>
+              <Button>[L] Label</Button>
+              <Button onClick={play}>[Space] Play</Button>
+            </Space.Compact>
+          </Space>
+          <Space direction="vertical" size="small">
+            <Typography.Text style={{ margin: 0 }} type="secondary">
+              Total: {data.length}
+              {marked.length > 0 && `, marked: ${marked.length}`}
+            </Typography.Text>
+            <Table
+              className={styles.table}
+              columns={[
+                {
+                  title: 'File',
+                  dataIndex: 'name',
+                  width: '15%',
+                  render: (value: string) =>
+                    R.intersperse(
+                      <br />,
+                      value.split(',').map((s, i) => <span key={i}>{s}</span>)
+                    ),
+                },
+                {
+                  title: 'Content',
+                  dataIndex: 'content',
+                  width: '70%',
+                  className: styles.tableContent,
+                  render: contentToReact,
+                },
+                { title: 'Label', dataIndex: 'label', className: styles.monospace },
+              ]}
+              rowKey="name"
+              dataSource={data}
+              size="small"
+              scroll={{ y: windowHeight - 175 }} // not great (TODO use 'sticky' attr instead?)
+              pagination={false}
+              rowSelection={rowSelection}
+              rowClassName={(record, rowIndex) => {
+                return record.name === focused?.name ? styles.focusedRow : ''
+              }}
+              onRow={(record, rowIndex) => {
+                return {
+                  onClick: (event) => {
+                    if (!R.isNil(rowIndex)) setFocused({ index: rowIndex, name: record.name })
+                  },
+                }
+              }}
             />
-          </div>
-        </div>
-
-        <div className={styles.grid}>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Docs <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Find in-depth information about Next.js features and&nbsp;API.
-            </p>
-          </a>
-
-          <a
-            href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Learn <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Learn about Next.js in an interactive course with&nbsp;quizzes!
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Templates <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Discover and deploy boilerplate example Next.js&nbsp;projects.
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <h2 className={inter.className}>
-              Deploy <span>-&gt;</span>
-            </h2>
-            <p className={inter.className}>
-              Instantly deploy your Next.js site to a shareable URL
-              with&nbsp;Vercel.
-            </p>
-          </a>
-        </div>
+          </Space>
+        </Space>
       </main>
     </>
   )
