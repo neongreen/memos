@@ -1,5 +1,9 @@
 # Memos
 
+Screenshot:
+
+![Screenshot of the app](memos-screenshot-jun12-2023.png)
+
 ## How to
 
 ### Upgrade Deno
