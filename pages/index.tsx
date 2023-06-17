@@ -254,7 +254,7 @@ export default function Home() {
     ['u', merge],
     ['c', copy],
     ['Space', play],
-    ['Enter', reword],
+    ['e', reword],
     ['Escape', unmarkAll],
     ['ArrowDown', focusNext],
     ['ArrowUp', focusPrev],
@@ -294,7 +294,7 @@ export default function Home() {
                 [K] Kill
               </Button>
               <Button onClick={merge}>[U] Merge</Button>
-              <Button onClick={reword}>[⏎] Reword</Button>
+              <Button onClick={reword}>[E] Reword</Button>
               <Button>[L] Label</Button>
               <Button onClick={play}>[Space] Play</Button>
             </Space.Compact>
