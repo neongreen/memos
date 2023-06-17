@@ -12,6 +12,15 @@ Screenshot:
 yarn tauri dev
 ```
 
+### Upgrade Rust dependencies & Rust compiler
+
+```bash
+cd src-tauri
+# Change the versions in Cargo.toml
+rustup update
+cargo update
+```
+
 ### Upgrade Deno
 
 ```bash
