@@ -269,6 +269,7 @@ fn add_to_things(
     }
 
     // Add to Things, using things:///json. For now we won't remove the memos from the database - it seems too risky.
+    // TODO: I can use x-success to check that the things were added, and then it would be fine to remove them from the DB.
     let mut url = Url::parse("things:///json").unwrap();
     url.set_query(Some(&format!(
         "data={}",
