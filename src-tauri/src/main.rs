@@ -185,13 +185,15 @@ fn set_content(
     Ok(())
 }
 
-/// Opens an audio file in the stored files directory.
+/// Play an audio file in the stored files directory, using VLC, and exit afterwards.
 ///
-/// If there are several files (separated with `,`), it will do `open` on all of them. For example, if you have macOS and VLC, it results in a playlist.
-///
-/// Currently only supports macOS because the `open` crate doesn't support passing several filenames. See https://github.com/Byron/open-rs/issues/70.
+/// If there are several files (separated with `,`), it will play all of them one after the other.
 #[tauri::command]
 fn open(name: &str) -> Result<(), InvokeError> {
+    if !cfg!(target_os = "macos") {
+        return Err(tauri_error("This command is only available on macOS"));
+    }
+
     // Detect if any of the files don't exist, and throw an error if so.
     let files = name.split(',').collect::<Vec<_>>();
     let dir = env::var("VOICE_MEMOS_STORAGE").expect("VOICE_MEMOS_STORAGE not set");
@@ -204,9 +206,10 @@ fn open(name: &str) -> Result<(), InvokeError> {
             )));
         }
     }
-    Command::new("/usr/bin/open")
+
+    Command::new("/Applications/VLC.app/Contents/MacOS/VLC")
         .current_dir(dir)
-        .args(files)
+        .args([vec!["--play-and-exit"], files].concat())
         .spawn()
         .map_err(tauri_error)?;
     Ok(())
