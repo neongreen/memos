@@ -175,7 +175,7 @@ export default function Home() {
       .catch((err) => {
         notification.open({
           type: 'error',
-          message: 'Error while killing the memos',
+          message: 'Error while killing memos',
           description: err.toString(),
         })
       })
@@ -190,7 +190,7 @@ export default function Home() {
       .catch((err) => {
         notification.open({
           type: 'error',
-          message: 'Error while merging the memos',
+          message: 'Error while merging memos',
           description: err.toString(),
         })
       })
@@ -255,6 +255,22 @@ export default function Home() {
     })
   }
 
+  const addToThings = () => {
+    const namesToMove = focused && marked.length === 0 ? [focused.name] : marked
+    if (namesToMove.length === 0) return
+    invoke('add_to_things', { names: namesToMove })
+      // .then(() => {
+      //   load()
+      // })
+      .catch((err) => {
+        notification.open({
+          type: 'error',
+          message: 'Error while adding memos to Things',
+          description: err.toString(),
+        })
+      })
+  }
+
   const [rewordModalOpen, setRewordModalOpen] = useState(false)
   const rewordEditorRef: React.RefObject<TiptapMethods> = React.useRef(null)
   const rewordModal = (
@@ -297,6 +313,7 @@ export default function Home() {
     ['c', copy],
     ['Space', play],
     ['e', reword],
+    ['t', addToThings],
     ['Escape', unmarkAll],
     ['ArrowDown', focusNext],
     ['ArrowUp', focusPrev],
@@ -339,6 +356,7 @@ export default function Home() {
               <Button onClick={reword}>[E] Reword</Button>
               <Button>[L] Label</Button>
               <Button onClick={play}>[Space] Play</Button>
+              <Button onClick={addToThings}>[T] Add to Things</Button>
             </Space.Compact>
           </Space>
           <Space direction="vertical" size="small">

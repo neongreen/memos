@@ -3,6 +3,8 @@
     windows_subsystem = "windows"
 )]
 
+mod things3;
+
 use rusqlite::{types::Value, Connection};
 use serde::Serialize;
 use std::env;
@@ -13,6 +15,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::InvokeError;
+use url::Url;
 // use tauri::{CustomMenuItem, Menu, MenuItem, Submenu};
 
 #[derive(Debug, Serialize)]
@@ -48,6 +51,7 @@ fn main() {
             merge,
             set_content,
             open,
+            add_to_things,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -185,19 +189,19 @@ fn set_content(
     Ok(())
 }
 
-/// Play an audio file in the stored files directory, using VLC, and exit afterwards.
+/// Play audio files in the stored files directory, using VLC, and exit afterwards.
 ///
-/// If there are several files (separated with `,`), it will play all of them one after the other.
+/// If there are several files, it will play all of them one after the other.
 #[tauri::command]
-fn open(name: &str) -> Result<(), InvokeError> {
+fn open(names: Vec<&str>) -> Result<(), InvokeError> {
     if !cfg!(target_os = "macos") {
         return Err(tauri_error("This command is only available on macOS"));
     }
 
-    // Detect if any of the files don't exist, and throw an error if so.
-    let files = name.split(',').collect::<Vec<_>>();
     let dir = env::var("VOICE_MEMOS_STORAGE").expect("VOICE_MEMOS_STORAGE not set");
-    for file in &files {
+
+    // Detect if any of the files don't exist, and throw an error if so.
+    for file in &names {
         let path = Path::new(&dir).join(file);
         if !path.exists() {
             return Err(tauri_error(format!(
@@ -209,8 +213,73 @@ fn open(name: &str) -> Result<(), InvokeError> {
 
     Command::new("/Applications/VLC.app/Contents/MacOS/VLC")
         .current_dir(dir)
-        .args([vec!["--play-and-exit"], files].concat())
+        .args([vec!["--play-and-exit"], names].concat())
         .spawn()
         .map_err(tauri_error)?;
+    Ok(())
+}
+
+/// Add to Things (Inbox).
+#[tauri::command]
+fn add_to_things(
+    names: Vec<&str>,
+    state: tauri::State<State>,
+) -> Result<(), InvokeError> {
+    // Detect if Things is available.
+    if !Path::new("/Applications/Things3.app").exists() {
+        return Err(tauri_error("Things is not installed"));
+    }
+
+    // Get memo contents from the database.
+    let db_conn = state.db_conn.clone();
+    let guard = db_conn.lock().map_err(tauri_error)?;
+    let conn = &*guard;
+    let names_param = Rc::new(
+        names
+            .iter()
+            .copied()
+            .map(|s| Value::from(String::from(s)))
+            .collect::<Vec<Value>>(),
+    );
+    let mut rows_vec = Vec::new();
+    let mut select_stmt = conn
+        .prepare(
+            "SELECT name, content, label FROM memos WHERE name IN rarray(?1) ORDER BY name ASC",
+        )
+        .map_err(tauri_error)?;
+    select_stmt
+        .query_and_then([&names_param], |row| {
+            rows_vec.push(Row {
+                name: row.get(0)?,
+                content: row.get(1)?,
+                label: row.get(2)?,
+            });
+            Ok::<(), rusqlite::Error>(())
+        })
+        .map_err(tauri_error)?
+        .for_each(drop);
+
+    // Construct an array of things3::Item objects from the memos. Note the definition of Item: it's an enum with ItemTodo(Todo), and the Todo inside is a struct. Also, don't use mutability when creating a struct.
+    let mut items: Vec<things3::Item> = Vec::new();
+    for row in &rows_vec {
+        items.push(things3::Item::Todo(things3::Todo {
+            title: row.content.clone(),
+            notes: None,
+        }));
+    }
+
+    // Add to Things, using things:///json. For now we won't remove the memos from the database - it seems too risky.
+    let mut url = Url::parse("things:///json").unwrap();
+    url.set_query(Some(&format!(
+        "data={}",
+        serde_json::to_string(&items).unwrap()
+    )));
+    url.query_pairs_mut()
+        .append_pair("reveal", &true.to_string());
+    Command::new("open")
+        .arg(url.as_str())
+        .spawn()
+        .map_err(tauri_error)?;
+
     Ok(())
 }
