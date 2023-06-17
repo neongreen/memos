@@ -71,19 +71,55 @@ function htmlToContent(html: string): string {
     .join('\n\n')
 }
 
+/**
+ * Focused row style for memo table rows.
+ */
+function focusedMemoRowStyle(selector: string) {
+  let focusBorderColor = 'color(srgb 0.0892 0.4658 0.999)'
+  let focusRowColor = '#fffbe5'
+  return `
+    ${selector} {
+      background-color: ${focusRowColor};
+    }
+    :is(${selector}) > td {
+      transition: none !important;
+      box-shadow: 0px 1.5px ${focusBorderColor} inset, 0px -1.5px ${focusBorderColor} inset;
+    }
+    :is(${selector}) > td:first-child {
+      box-shadow: 
+        0px 1.5px ${focusBorderColor} inset,
+        0px -1.5px ${focusBorderColor} inset,
+        1.5px 0px ${focusBorderColor} inset;
+      border-top-left-radius: 2px;
+      border-bottom-left-radius: 2px;
+    }
+    :is(${selector}) > td:last-child {
+      box-shadow:
+        0px 1.5px ${focusBorderColor} inset,
+        0px -1.5px ${focusBorderColor} inset,
+        -1.5px 0px ${focusBorderColor} inset;
+      border-top-right-radius: 2px;
+      border-bottom-right-radius: 2px;
+    }
+  `
+}
+
 export default function Home() {
   // Which rows are marked (selected)
   const [marked, setMarked] = useState<string[]>([])
 
-  const rowSelection = {
-    selectedRowKeys: marked,
-    onChange: (keys: React.Key[], rows: Row[]) => {
-      setMarked(keys as string[])
-    },
-    getCheckboxProps: (record: Row) => ({
-      name: record.name,
+  const rowSelection = React.useMemo(
+    () => ({
+      selectedRowKeys: marked,
+      onChange: (keys: React.Key[], rows: Row[]) => {
+        setMarked(keys as string[])
+      },
+      getCheckboxProps: (record: Row) => ({
+        name: record.name,
+      }),
     }),
-  }
+    [marked]
+  )
 
   const [data, setData] = useState<Row[]>([])
 
@@ -304,45 +340,52 @@ export default function Home() {
               Total: {data.length}
               {marked.length > 0 && `, marked: ${marked.length}`}
             </Typography.Text>
-            <Table
-              className={styles.table}
-              columns={[
-                {
-                  title: 'File',
-                  dataIndex: 'name',
-                  width: '15%',
-                  render: (value: string) =>
-                    R.intersperse(
-                      <br />,
-                      value.split(',').map((s, i) => <span key={i}>{s}</span>)
-                    ),
-                },
-                {
-                  title: 'Content',
-                  dataIndex: 'content',
-                  width: '70%',
-                  className: styles.tableContent,
-                  render: contentToReact,
-                },
-                { title: 'Label', dataIndex: 'label', className: styles.monospace },
-              ]}
-              rowKey="name"
-              dataSource={data}
-              size="small"
-              scroll={{ y: windowHeight - 175 }} // not great (TODO use 'sticky' attr instead?)
-              pagination={false}
-              rowSelection={rowSelection}
-              rowClassName={(record, rowIndex) => {
-                return record.name === focused?.name ? styles.focusedRow : ''
-              }}
-              onRow={(record, rowIndex) => {
-                return {
-                  onClick: (event) => {
-                    if (!R.isNil(rowIndex)) setFocused({ index: rowIndex, name: record.name })
-                  },
-                }
-              }}
-            />
+            <style>
+              {/* Highlighting by setting/unsetting classes is too slow. We don't want to rerender the table when moving the focus. So we generate a CSS string instead.
+               */}
+              {focused ? focusedMemoRowStyle(`tr[data-row-key="${focused.name}"]`) : ''}
+            </style>
+            {React.useMemo(
+              () => (
+                <Table
+                  className={styles.table}
+                  columns={[
+                    {
+                      title: 'File',
+                      dataIndex: 'name',
+                      width: '15%',
+                      render: (value: string) =>
+                        R.intersperse(
+                          <br />,
+                          value.split(',').map((s, i) => <span key={i}>{s}</span>)
+                        ),
+                    },
+                    {
+                      title: 'Content',
+                      dataIndex: 'content',
+                      width: '70%',
+                      className: styles.tableContent,
+                      render: contentToReact,
+                    },
+                    { title: 'Label', dataIndex: 'label', className: styles.monospace },
+                  ]}
+                  rowKey="name"
+                  dataSource={data}
+                  size="small"
+                  scroll={{ y: windowHeight - 175 }} // not great (TODO use 'sticky' attr instead?)
+                  pagination={false}
+                  rowSelection={rowSelection}
+                  onRow={(record, rowIndex) => {
+                    return {
+                      onClick: (event) => {
+                        if (!R.isNil(rowIndex)) setFocused({ index: rowIndex, name: record.name })
+                      },
+                    }
+                  }}
+                />
+              ),
+              [data, rowSelection, windowHeight]
+            )}
           </Space>
         </Space>
       </main>
