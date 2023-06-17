@@ -6,14 +6,29 @@ Screenshot:
 
 ## How to
 
+### Run the app with hot reloading
+
+```bash
+yarn tauri dev
+```
+
 ### Upgrade Deno
 
-```
-brew upgrade deno
+```bash
+deno upgrade
 ```
 
-### Import memos
+(NB: don't use the Brew version.)
 
-```
+### Import memos into the database
+
+```bash
 deno run -A import-memos/index.ts
+```
+
+### Add a Rust dep
+
+```bash
+cd src-tauri
+cargo add ...
 ```
