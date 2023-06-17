@@ -29,6 +29,9 @@
   "[jsonc]": {
     "editor.defaultFormatter": "vscode.json-language-features"
   },
-  "deno.enable": true,
-  "deno.unstable": true
+  "deno.enable": false,
+  "deno.unstable": true,
+  "deno.enablePaths": [
+    "./import-memos"
+  ]
 }
