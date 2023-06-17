@@ -246,7 +246,8 @@ export default function Home() {
   const play = () => {
     const namesToPlay = focused && marked.length === 0 ? [focused.name] : marked
     if (namesToPlay.length === 0) return
-    invoke('open', { names: namesToPlay }).catch((err) => {
+    // Note: each 'name' can actually be several files separated by ','
+    invoke('open', { names: namesToPlay.join(',').split(',') }).catch((err) => {
       notification.open({
         message: `Error while playing ${namesToPlay.join(',')}`,
         description: err.toString(),
