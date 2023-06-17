@@ -246,7 +246,13 @@ export default function Home() {
   const play = () => {
     const namesToPlay = focused && marked.length === 0 ? [focused.name] : marked
     if (namesToPlay.length === 0) return
-    invoke('open', { name: namesToPlay.join(',') })
+    invoke('open', { name: namesToPlay.join(',') }).catch((err) => {
+      notification.open({
+        message: `Error while playing ${namesToPlay.join(',')}`,
+        description: err.toString(),
+        type: 'error',
+      })
+    })
   }
 
   const [rewordModalOpen, setRewordModalOpen] = useState(false)

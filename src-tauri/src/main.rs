@@ -6,6 +6,7 @@
 use rusqlite::{types::Value, Connection};
 use serde::Serialize;
 use std::env;
+use std::path::Path;
 use std::process::Command;
 use std::{
     rc::Rc,
@@ -186,16 +187,26 @@ fn set_content(
 
 /// Opens an audio file in the stored files directory.
 ///
-/// If there are several (separated with `,`), it will do `open` on all of them. For example, if you have macOS and VLC, it results in a playlist.
+/// If there are several files (separated with `,`), it will do `open` on all of them. For example, if you have macOS and VLC, it results in a playlist.
 ///
 /// Currently only supports macOS because the `open` crate doesn't support passing several filenames. See https://github.com/Byron/open-rs/issues/70.
 #[tauri::command]
 fn open(name: &str) -> Result<(), InvokeError> {
+    // Detect if any of the files don't exist, and throw an error if so.
+    let files = name.split(',').collect::<Vec<_>>();
+    let dir = env::var("VOICE_MEMOS_STORAGE").expect("VOICE_MEMOS_STORAGE not set");
+    for file in &files {
+        let path = Path::new(&dir).join(file);
+        if !path.exists() {
+            return Err(tauri_error(format!(
+                "File {} doesn't exist",
+                path.display()
+            )));
+        }
+    }
     Command::new("/usr/bin/open")
-        .current_dir(
-            env::var("VOICE_MEMOS_STORAGE").expect("VOICE_MEMOS_STORAGE not set"),
-        )
-        .args(name.split(','))
+        .current_dir(dir)
+        .args(files)
         .spawn()
         .map_err(tauri_error)?;
     Ok(())
