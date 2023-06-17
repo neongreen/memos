@@ -4,7 +4,12 @@ Screenshot:
 
 ![Screenshot of the app](memos-screenshot-jun12-2023.png)
 
-## How to
+## Using this app if you're not me
+
+* You need to figure out what the env vars are. Or just ask me.
+* Some features, like "Play" and "Add to Things", only work on macOS right now.
+
+## Dev notes
 
 ### Run the app with hot reloading
 
