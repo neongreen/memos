@@ -1,7 +1,7 @@
 {
   "build": {
-    "beforeBuildCommand": "yarn build && yarn export",
-    "beforeDevCommand": "yarn dev",
+    "beforeBuildCommand": "pnpm run build && pnpm run export",
+    "beforeDevCommand": "pnpm run dev",
     "devPath": "http://localhost:7333",
     "distDir": "../out"
   },

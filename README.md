@@ -14,7 +14,7 @@ Screenshot:
 ### Run the app with hot reloading
 
 ```bash
-yarn tauri dev
+pnpm run tauri dev
 ```
 
 ### Upgrade Rust dependencies & Rust compiler
@@ -25,14 +25,6 @@ cd src-tauri
 rustup update
 cargo update
 ```
-
-### Upgrade Deno
-
-```bash
-deno upgrade
-```
-
-(NB: don't use the Brew version.)
 
 ### Import memos into the database
 

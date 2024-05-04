@@ -34,9 +34,10 @@
     "scroll-into-view-if-needed": "^3.0.6",
     "typescript": "5.0.2"
   },
-  "packageManager": "yarn@3.5.0",
+  "packageManager": "pnpm@9.0.6",
   "volta": {
-    "node": "18.15.0"
+    "node": "18.15.0",
+    "pnpm": "9.0.6"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1.2.3",
