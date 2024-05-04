@@ -310,7 +310,7 @@ export default function Home() {
 
   for (const [key, action] of [
     ['m', mark],
-    ['k', kill],
+    ['Backspace', kill],
     ['u', merge],
     ['c', copy],
     ['Space', play],
@@ -318,7 +318,9 @@ export default function Home() {
     ['t', addToThings],
     ['Escape', unmarkAll],
     ['ArrowDown', focusNext],
+    ['j', focusNext],
     ['ArrowUp', focusPrev],
+    ['k', focusPrev],
   ] satisfies [string, () => void][]) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     useHotkeys(
@@ -352,7 +354,7 @@ export default function Home() {
               </Button>
               <Button onClick={copy}>[C] Copy</Button>
               <Button danger onClick={kill}>
-                [K] Kill
+                [⌫] Delete
               </Button>
               <Button onClick={merge}>[U] Merge</Button>
               <Button onClick={reword}>[E] Reword</Button>
@@ -400,6 +402,7 @@ export default function Home() {
                     rowKey="name"
                     dataSource={data}
                     size="small"
+                    style={{ marginRight: '1.5rem' }}
                     // https://github.com/ant-design/ant-design/issues/23974 - life is suffering
                     scroll={{ y: windowHeight - 175 }}
                     pagination={false}
