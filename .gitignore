@@ -40,3 +40,5 @@ next-env.d.ts
 
 # memos db
 memos.sqlite
+# Turborepo
+.turbo

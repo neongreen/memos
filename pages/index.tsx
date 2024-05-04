@@ -12,6 +12,7 @@ import StarterKit from '@tiptap/starter-kit'
 import ReactDOMServer from 'react-dom/server'
 import * as cheerio from 'cheerio'
 import copyToClipboard from 'copy-to-clipboard'
+import NoSSR from 'react-no-ssr'
 
 type Row = { name: string; content: string; label: string }
 
@@ -370,47 +371,51 @@ export default function Home() {
                */}
               {focused ? focusedMemoRowStyle(`tr[data-row-key="${focused.name}"]`) : ''}
             </style>
-            {React.useMemo(
-              () => (
-                <Table
-                  className={styles.table}
-                  columns={[
-                    {
-                      title: 'File',
-                      dataIndex: 'name',
-                      width: '15%',
-                      render: (value: string) =>
-                        R.intersperse(
-                          <br />,
-                          value.split(',').map((s, i) => <span key={i}>{s}</span>)
-                        ),
-                    },
-                    {
-                      title: 'Content',
-                      dataIndex: 'content',
-                      width: '70%',
-                      className: styles.tableContent,
-                      render: contentToReact,
-                    },
-                    { title: 'Label', dataIndex: 'label', className: styles.monospace },
-                  ]}
-                  rowKey="name"
-                  dataSource={data}
-                  size="small"
-                  scroll={{ y: windowHeight - 175 }} // not great (TODO use 'sticky' attr instead?)
-                  pagination={false}
-                  rowSelection={rowSelection}
-                  onRow={(record, rowIndex) => {
-                    return {
-                      onClick: (event) => {
-                        if (!R.isNil(rowIndex)) setFocused({ index: rowIndex, name: record.name })
+            {/* NoSSR is needed b/c otherwise 'scroll' is broken */}
+            <NoSSR>
+              {React.useMemo(
+                () => (
+                  <Table
+                    className={styles.table}
+                    columns={[
+                      {
+                        title: 'File',
+                        dataIndex: 'name',
+                        width: '15%',
+                        render: (value: string) =>
+                          R.intersperse(
+                            <br />,
+                            value.split(',').map((s, i) => <span key={i}>{s}</span>)
+                          ),
                       },
-                    }
-                  }}
-                />
-              ),
-              [data, rowSelection, windowHeight]
-            )}
+                      {
+                        title: 'Content',
+                        dataIndex: 'content',
+                        width: '70%',
+                        className: styles.tableContent,
+                        render: contentToReact,
+                      },
+                      { title: 'Label', dataIndex: 'label', className: styles.monospace },
+                    ]}
+                    rowKey="name"
+                    dataSource={data}
+                    size="small"
+                    // https://github.com/ant-design/ant-design/issues/23974 - life is suffering
+                    scroll={{ y: windowHeight - 175 }}
+                    pagination={false}
+                    rowSelection={rowSelection}
+                    onRow={(record, rowIndex) => {
+                      return {
+                        onClick: (event) => {
+                          if (!R.isNil(rowIndex)) setFocused({ index: rowIndex, name: record.name })
+                        },
+                      }
+                    }}
+                  />
+                ),
+                [data, rowSelection, windowHeight]
+              )}
+            </NoSSR>
           </Space>
         </Space>
       </main>
